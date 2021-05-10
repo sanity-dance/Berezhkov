@@ -28,7 +28,8 @@ namespace Berezhkov
             }
             public bool Validate(JObject userConfig, bool required)
             {
-                bool ValidToken = false;
+                bool ValidToken = true;
+                ContainsValidValue = false;
                 if(userConfig.ContainsKey(Name))
                 {
                     ValidToken = ValidationFunction(userConfig[Name], Name);
@@ -44,6 +45,7 @@ namespace Berezhkov
                 else if (required)
                 {
                     Console.WriteLine("User config is missing required token " + Name);
+                    ValidToken = false;
                 }
                 else if (DefaultValue != null)
                 {
