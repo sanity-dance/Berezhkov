@@ -16,7 +16,7 @@ namespace Berezhkov
             public string Name { get; set; }
             public string HelpString { get; set; }
             public string DefaultValue { get; set; }
-            public bool ValidToken { get; set; }
+            public bool ContainsValidValue { get; set; }
             protected Func<JToken,string,bool> ValidationFunction { get; set; }
 
             public ConfigToken(string inputName, Func<JToken,string,bool> inputValidationFunction, string inputHelpString, string inputDefaultValue=null)
@@ -25,16 +25,20 @@ namespace Berezhkov
                 ValidationFunction = inputValidationFunction;
                 HelpString = inputHelpString;
                 DefaultValue = inputDefaultValue;
-                ValidToken = false;
             }
             public bool Validate(JObject userConfig, bool required)
             {
+                bool ValidToken = false;
                 if(userConfig.ContainsKey(Name))
                 {
                     ValidToken = ValidationFunction(userConfig[Name], Name);
                     if(!ValidToken)
                     {
                         Console.WriteLine(HelpString);
+                    }
+                    else
+                    {
+                        ContainsValidValue = true;
                     }
                 }
                 else if (required)
@@ -45,6 +49,7 @@ namespace Berezhkov
                 {
                     userConfig[Name] = DefaultValue; // THIS MUTATES THE OBJECT PASSED INTO VALIDATE. USE WITH CAUTION.
                     ValidToken = true;
+                    ContainsValidValue = true;
                 }
                 return ValidToken;
             }
