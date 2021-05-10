@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 
@@ -6,8 +7,8 @@ namespace Berezhkov
 {
     public abstract class JsonConfig
     {
-        public Dictionary<string, ConfigToken> RequiredConfigTokens { get; set; }
-        public Dictionary<string, ConfigToken> OptionalConfigTokens { get; set; }
+        protected Dictionary<string, ConfigToken> RequiredConfigTokens { get; set; }
+        protected Dictionary<string, ConfigToken> OptionalConfigTokens { get; set; }
         public JObject UserConfig { get; set; }
         public bool ConfigValid { get; set; }
         public class ConfigToken
@@ -15,8 +16,8 @@ namespace Berezhkov
             public string Name { get; set; }
             public string HelpString { get; set; }
             public string DefaultValue { get; set; }
-            bool ValidToken { get; set; }
-            Func<JToken,string,bool> ValidationFunction { get; set; }
+            public bool ValidToken { get; set; }
+            protected Func<JToken,string,bool> ValidationFunction { get; set; }
 
             public ConfigToken(string inputName, Func<JToken,string,bool> inputValidationFunction, string inputHelpString, string inputDefaultValue=null)
             {
@@ -47,6 +48,10 @@ namespace Berezhkov
                 }
                 return ValidToken;
             }
+            public override string ToString()
+            {
+                return Name + ": " + HelpString;
+            }
         }
 
         public override string ToString()
@@ -71,6 +76,20 @@ namespace Berezhkov
                 newDictionary.Add(token.Name, token);
             }
             return newDictionary;
+        }
+
+        public void GenerateEmptyConfig(string filepath)
+        {
+            JObject newConfig = new JObject();
+            foreach(var token in RequiredConfigTokens)
+            {
+                newConfig[token.Key] = token.Value.HelpString;
+            }
+            foreach (var token in OptionalConfigTokens)
+            {
+                newConfig[token.Key] = token.Value.HelpString;
+            }
+            File.WriteAllText(filepath, newConfig.ToString());
         }
 
         /*
