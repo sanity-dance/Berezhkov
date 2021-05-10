@@ -89,7 +89,9 @@ namespace Berezhkov
             {
                 newConfig[token.Key] = token.Value.HelpString;
             }
-            File.WriteAllText(filepath, newConfig.ToString());
+            FileInfo file = new FileInfo(filepath);
+            file.Directory.Create();
+            File.WriteAllText(file.FullName, newConfig.ToString());
         }
 
         /*
