@@ -8,11 +8,13 @@ namespace Berezhkov
     {
         public Dictionary<string, ConfigToken> RequiredConfigTokens { get; set; }
         public Dictionary<string, ConfigToken> OptionalConfigTokens { get; set; }
+        public JObject UserConfig { get; set; }
+        public bool ConfigValid { get; set; }
         public class ConfigToken
         {
-            string Name { get; set; }
-            string HelpString { get; set; }
-            string DefaultValue { get; set; }
+            public string Name { get; set; }
+            public string HelpString { get; set; }
+            public string DefaultValue { get; set; }
             bool ValidToken { get; set; }
             Func<JToken,string,bool> ValidationFunction { get; set; }
 
@@ -38,10 +40,45 @@ namespace Berezhkov
                 {
                     Console.WriteLine("User config is missing required token " + Name);
                 }
+                else if (DefaultValue != null)
+                {
+                    userConfig[Name] = DefaultValue; // THIS MUTATES THE OBJECT PASSED INTO VALIDATE. USE WITH CAUTION.
+                    ValidToken = true;
+                }
                 return ValidToken;
             }
         }
 
+        public override string ToString()
+        {
+            List<string> configString = new List<string>();
+            foreach(var token in RequiredConfigTokens)
+            {
+                configString.Add(token.Key + ": " + (UserConfig.ContainsKey(token.Key) ? UserConfig[token.Key].ToString() : token.Value.DefaultValue == null ? "" : token.Value.DefaultValue));
+            }
+            foreach (var token in OptionalConfigTokens)
+            {
+                configString.Add(token.Key + ": " + (UserConfig.ContainsKey(token.Key) ? UserConfig[token.Key].ToString() : token.Value.DefaultValue == null ? "" : token.Value.DefaultValue));
+            }
+            return string.Join('\n',configString);
+        }
+
+        protected Dictionary<string,ConfigToken> GetDictionary(ConfigToken[] tokenArray)
+        {
+            Dictionary<string, ConfigToken> newDictionary = new Dictionary<string, ConfigToken>();
+            foreach(var token in tokenArray)
+            {
+                newDictionary.Add(token.Name, token);
+            }
+            return newDictionary;
+        }
+
+        /*
+        
+        The following method will be used to produce ValidationFunction members for ConfigTokens. It serves two purposes: First, to enforce type checking by ensuring
+        that the given JToken can be parsed as type T, and second, to apply any additional constraints the developer requires.
+
+        */
         public Func<JToken,string,bool> ValidationFactory<T>(params Func<JToken,string,bool>[] constraints)
         {
             bool ValidationFunction(JToken inputToken, string tokenName)
@@ -66,6 +103,47 @@ namespace Berezhkov
                 }
             }
             return ValidationFunction;
+        }
+
+        // An example constraint that can be passed into ValidationFactory- it accepts a list of strings and returns a method to check to see if the given
+        //      token is in the list of acceptable values.
+
+        protected Func<JToken, string, bool> ConstrainStringValues(List<string> acceptableValues)
+        {
+            bool InnerMethod(JToken inputToken, string inputName)
+            {
+                if (!acceptableValues.Contains(inputToken.ToString())) //Returns false if inputString is not in provided list
+                {
+                    Console.WriteLine("Input " + inputName + " with value " + inputToken.ToString() + " is not valid. Valid values: " + string.Join(',', acceptableValues)); //Tell the user what's wrong and how to fix it.
+                    return false;
+                }
+                return true;
+            }
+            return InnerMethod;
+        }
+
+    }
+
+    public class ExampleConfig : JsonConfig
+    {
+        string[] AcceptableFruits = { "Grape", "Orange", "Apple" };
+        ExampleConfig(JObject inputUserConfig)
+        {
+            UserConfig = inputUserConfig;
+            RequiredConfigTokens = GetDictionary(new ConfigToken[]
+                {
+                new ConfigToken("Fruit",ValidationFactory<string>(ConstrainStringValues(new List<string>(AcceptableFruits))),"String: A helpful message to the user describing what this token is and why it must be one of these fruits and no others.")
+            });
+
+            ConfigValid = true;
+
+            foreach(var token in RequiredConfigTokens)
+            {
+                if(!token.Value.Validate(UserConfig,true))
+                {
+                    ConfigValid = false;
+                }
+            }
         }
     }
 }
