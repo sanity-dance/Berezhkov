@@ -132,7 +132,8 @@ namespace Berezhkov
             UserConfig = inputUserConfig;
             RequiredConfigTokens = GetDictionary(new ConfigToken[]
                 {
-                new ConfigToken("Fruit",ValidationFactory<string>(ConstrainStringValues(new List<string>(AcceptableFruits))),"String: A helpful message to the user describing what this token is and why it must be one of these fruits and no others.")
+                new ConfigToken("Fruit",ValidationFactory<string>(ConstrainStringValues(new List<string>(AcceptableFruits))),"String: A helpful message to the user describing what this token is and why it must be one of these fruits and no others."),
+                new ConfigToken("NumberConsumed",ValidationFactory<int>(),"Int: A helpful message to the user describing why they must tell your mysterious program how many fruits they have consumed.")
             });
 
             ConfigValid = true;
