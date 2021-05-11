@@ -98,7 +98,9 @@ namespace Berezhkov
             return newDictionary;
         }
 
-        public void GenerateEmptyConfig(string filepath)
+        // The following method can be called from child config classes as part of a static void method that instantiates an empty example of the current config file in order to generate an empty config file. Example below.
+
+        protected void GenerateEmptyConfig(string filepath)
         {
             JObject newConfig = new JObject();
             foreach(var token in RequiredConfigTokens)
@@ -176,6 +178,11 @@ namespace Berezhkov
                 new ConfigToken("NumberConsumed",ValidationFactory<int>(),"Int: A helpful message to the user describing why they must tell your mysterious program how many fruits they have consumed.")
             });
 
+            OptionalConfigTokens = GetDictionary(new ConfigToken[]
+            {
+                new ConfigToken("NearestMarket",ValidationFactory<string>(),"String: Location of the nearest fruit market.")
+            });
+
             ConfigValid = true;
 
             foreach(var token in RequiredConfigTokens)
@@ -185,6 +192,39 @@ namespace Berezhkov
                     ConfigValid = false;
                 }
             }
+        }
+
+        /*
+        
+        This silliness requires some explanation.
+
+        We could have made GenerateEmptyConfig() a static void method in JsonConfig, but the issue is that RequiredConfigTokens and OptionalConfigTokens would need to be static as well, which creates issues with
+        other methods inherited from JsonConfig. Issues can also happen when instantiating multiple JsonConfig objects.
+
+        Therefore, we need to instantiate an empty config (which would normally generate a warning, but we suppress it by rerouting console output temporarily) and run GenerateEmptyConfig from there.
+
+        The below method allows a user to execute ExampleConfig.GenerateEmptyFruitConfig("custompath/customfilename.json"), which will generate the following json file:
+
+        {
+            "Fruit":"String: A helpful message to the user describing what this token is and why it must be one of these fruits and no others.",
+            "NumberConsumed":"Int: A helpful message to the user describing why they must tell your mysterious program how many fruits they have consumed.",
+            "NearestMarket","Optional: String: Location of the nearest fruit market."
+        }
+
+        */
+
+        public static void GenerateEmptyFruitConfig(string outputPath)
+        {
+
+            TextWriter original = Console.Out;
+            using(var sw = new StringWriter())
+            {
+                Console.SetOut(sw);
+                ExampleConfig tempConfig = new ExampleConfig(JObject.Parse(""));
+                tempConfig.GenerateEmptyConfig(outputPath);
+            }
+
+            Console.SetOut(original);
         }
     }
 
