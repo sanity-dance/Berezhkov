@@ -7,32 +7,44 @@ namespace Berezhkov
 {
     public abstract class JsonConfig
     {
+        // In child config definitions, RequiredConfigTokens and OptionalConfigTokens are set by passing a list of ConfigTokens to the GetDictionary method.
         protected Dictionary<string, ConfigToken> RequiredConfigTokens { get; set; }
         protected Dictionary<string, ConfigToken> OptionalConfigTokens { get; set; }
         public JObject UserConfig { get; set; }
         public bool ConfigValid { get; set; }
         public class ConfigToken
         {
-            public string Name { get; set; }
-            public string HelpString { get; set; }
-            public string DefaultValue { get; set; }
-            public bool ContainsValidValue { get; set; }
-            protected Func<JToken,string,bool> ValidationFunction { get; set; }
+            public string TokenName { get; set; } // Name of the token; corresponds to the search term in the user's config.
+            public string HelpString { get; set; } // The HelpString is printed to console when the user generates an empty config file and when they enter an invalid value of some kind.
+            public string DefaultValue { get; set; } // If the DefaultValue is set and the user's config does not contain a value for this token, the UserConfig JObject stored in the JsonConfig parent will be modified to contain the token with the default value set.
+            public bool ContainsValidValue { get; set; } // This keeps track of whether or not the user's config contains a valid value for this token.
+            protected Func<JToken,string,bool> ValidationFunction { get; set; } // This function will be executed on the value found in the user config for this token, if a value exists.
 
             public ConfigToken(string inputName, Func<JToken,string,bool> inputValidationFunction, string inputHelpString, string inputDefaultValue=null)
             {
-                Name = inputName;
+                TokenName = inputName;
                 ValidationFunction = inputValidationFunction;
                 HelpString = inputHelpString;
                 DefaultValue = inputDefaultValue;
             }
+            /*
+            
+            When Validate is called on a config token, it searches the JObject userConfig for a token with its current Name.
+
+            If such a token is found, ValidationFunction() is executed. The value found and the token's name are passed as parameters.
+
+            The function passed to a constructor should ideally be something created by ValidationFactory<T>(), which will enforce type checking on the user input and execute any additional Func<JToken, string, bool> passed to the ValidationFactory function.
+
+            Example below.
+
+            */
             public bool Validate(JObject userConfig, bool required)
             {
                 bool ValidToken = true;
                 ContainsValidValue = false;
-                if(userConfig.ContainsKey(Name))
+                if(userConfig.ContainsKey(TokenName))
                 {
-                    ValidToken = ValidationFunction(userConfig[Name], Name);
+                    ValidToken = ValidationFunction(userConfig[TokenName], TokenName);
                     if(!ValidToken)
                     {
                         Console.WriteLine(HelpString);
@@ -42,14 +54,15 @@ namespace Berezhkov
                         ContainsValidValue = true;
                     }
                 }
+                // Note about required vs optional token handling; ValidToken keeps track of whether or not the user's config should still be valid after the Validate function is over. If an optional token is missing, that is not a good reason to mark the user's config invalid.
                 else if (required)
                 {
-                    Console.WriteLine("User config is missing required token " + Name);
+                    Console.WriteLine("User config is missing required token " + TokenName);
                     ValidToken = false;
                 }
                 else if (DefaultValue != null)
                 {
-                    userConfig[Name] = DefaultValue; // THIS MUTATES THE OBJECT PASSED INTO VALIDATE. USE WITH CAUTION.
+                    userConfig[TokenName] = DefaultValue; // THIS MUTATES THE OBJECT PASSED INTO VALIDATE. USE WITH CAUTION.
                     ValidToken = true;
                     ContainsValidValue = true;
                 }
@@ -57,7 +70,7 @@ namespace Berezhkov
             }
             public override string ToString()
             {
-                return Name + ": " + HelpString;
+                return TokenName + ": " + HelpString;
             }
         }
 
@@ -80,7 +93,7 @@ namespace Berezhkov
             Dictionary<string, ConfigToken> newDictionary = new Dictionary<string, ConfigToken>();
             foreach(var token in tokenArray)
             {
-                newDictionary.Add(token.Name, token);
+                newDictionary.Add(token.TokenName, token);
             }
             return newDictionary;
         }
@@ -133,8 +146,7 @@ namespace Berezhkov
             return ValidationFunction;
         }
 
-        // An example constraint that can be passed into ValidationFactory- it accepts a list of strings and returns a method to check to see if the given
-        //      token is in the list of acceptable values.
+        // An example constraint that can be passed into ValidationFactory- it accepts a list of strings and returns a method to check to see if the given token is in the list of acceptable values.
 
         protected Func<JToken, string, bool> ConstrainStringValues(List<string> acceptableValues)
         {
@@ -142,7 +154,7 @@ namespace Berezhkov
             {
                 if (!acceptableValues.Contains(inputToken.ToString())) //Returns false if inputString is not in provided list
                 {
-                    Console.WriteLine("Input " + inputName + " with value " + inputToken.ToString() + " is not valid. Valid values: " + string.Join(',', acceptableValues)); //Tell the user what's wrong and how to fix it.
+                    Console.WriteLine("Input " + inputName + " with value " + inputToken.ToString() + " is not valid. Valid values: " + string.Join(',', acceptableValues)); // Tell the user what's wrong and how to fix it.
                     return false;
                 }
                 return true;
@@ -175,4 +187,15 @@ namespace Berezhkov
             }
         }
     }
+
+    /*
+    
+    Below is example console output if the user tried to pass in the config { "Fruit":"Watermelon,"NumberConsumed:"bleventeen" }
+
+    Input Fruit with value Watermelon is not valid. Valid values: Grape,Orange,Apple
+    String: A helpful message to the user describing what this token is and why it must be one of these fruits and no others.
+    Token NumberConsumed with value bleventeen is in an invalid format.
+    Int: A helpful message to the user describing why they must tell your mysterious program how many fruits they have consumed.
+
+    */
 }
