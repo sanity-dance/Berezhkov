@@ -129,12 +129,20 @@ namespace Berezhkov
                 bool validToken = true;
                 try
                 {
-                    T castValue = inputToken.Value<T>();
-                    foreach(var constraint in constraints)
+                    if(inputToken.IsNullOrEmpty())
                     {
-                        if(!constraint(inputToken,tokenName))
+                        Console.WriteLine("The value of token " + tokenName + " is empty or null.");
+                        validToken = false;
+                    }
+                    else
+                    {
+                        T castValue = inputToken.Value<T>();
+                        foreach(var constraint in constraints)
                         {
-                            validToken = false;
+                            if(!constraint(inputToken,tokenName))
+                            {
+                                validToken = false;
+                            }
                         }
                     }
                     return validToken;
@@ -166,10 +174,23 @@ namespace Berezhkov
 
     }
 
+    public static class JTokenExtension
+    {
+        public static bool IsNullOrEmpty(this JToken token)
+        {
+        return (token == null) ||
+               (token.Type == JTokenType.Array && !token.HasValues) ||
+               (token.Type == JTokenType.Object && !token.HasValues) ||
+               (token.Type == JTokenType.String && token.ToString() == String.Empty) ||
+               (token.Type == JTokenType.Null) ||
+               (token.Type == JTokenType.Undefined);
+        }
+    }
+
     public class ExampleConfig : JsonConfig
     {
         string[] AcceptableFruits = { "Grape", "Orange", "Apple" };
-        ExampleConfig(JObject inputUserConfig)
+        public ExampleConfig(JObject inputUserConfig)
         {
             UserConfig = inputUserConfig;
             RequiredConfigTokens = GetDictionary(new ConfigToken[]
@@ -188,6 +209,13 @@ namespace Berezhkov
             foreach(var token in RequiredConfigTokens)
             {
                 if(!token.Value.Validate(UserConfig,true))
+                {
+                    ConfigValid = false;
+                }
+            }
+            foreach(var token in OptionalConfigTokens)
+            {
+                if(!token.Value.Validate(UserConfig,false))
                 {
                     ConfigValid = false;
                 }
@@ -230,7 +258,7 @@ namespace Berezhkov
 
     /*
     
-    Below is example console output if the user tried to pass in the config { "Fruit":"Watermelon,"NumberConsumed:"bleventeen" }
+    Below is example console output if the user tried to pass in the config { "Fruit":"Watermelon","NumberConsumed":"bleventeen" }
 
     Input Fruit with value Watermelon is not valid. Valid values: Grape,Orange,Apple
     String: A helpful message to the user describing what this token is and why it must be one of these fruits and no others.
