@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Collections.Generic;
+using System.Linq;
 using Newtonsoft.Json.Linq;
 
 namespace Berezhkov
@@ -71,6 +72,33 @@ namespace Berezhkov
             public override string ToString()
             {
                 return TokenName + ": " + HelpString;
+            }
+        }
+
+        protected void Initialize()
+        {
+            ConfigValid = true;
+            foreach (var token in RequiredConfigTokens)
+            {
+                if (!token.Value.Validate(UserConfig, true))
+                {
+                    ConfigValid = false;
+                }
+            }
+            foreach (var token in OptionalConfigTokens)
+            {
+                if (!token.Value.Validate(UserConfig, false))
+                {
+                    ConfigValid = false;
+                }
+            }
+            foreach (var property in UserConfig)
+            {
+                if (!RequiredConfigTokens.Keys.Contains(property.Key) && !OptionalConfigTokens.Keys.Contains(property.Key)) ;
+                {
+                    Console.WriteLine("Unrecognized token in input config file: " + property.Key);
+                    ConfigValid = false;
+                }
             }
         }
 
@@ -204,22 +232,7 @@ namespace Berezhkov
                 new ConfigToken("NearestMarket",ValidationFactory<string>(),"String: Location of the nearest fruit market.")
             });
 
-            ConfigValid = true;
-
-            foreach(var token in RequiredConfigTokens)
-            {
-                if(!token.Value.Validate(UserConfig,true))
-                {
-                    ConfigValid = false;
-                }
-            }
-            foreach(var token in OptionalConfigTokens)
-            {
-                if(!token.Value.Validate(UserConfig,false))
-                {
-                    ConfigValid = false;
-                }
-            }
+            Initialize();
         }
 
         /*
