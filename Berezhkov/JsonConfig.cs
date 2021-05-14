@@ -11,6 +11,7 @@ namespace Berezhkov
         // In child config definitions, RequiredConfigTokens and OptionalConfigTokens are set by passing a list of ConfigTokens to the GetDictionary method.
         protected Dictionary<string, ConfigToken> RequiredConfigTokens { get; set; }
         protected Dictionary<string, ConfigToken> OptionalConfigTokens { get; set; }
+        protected List<List<List<ConfigToken>>> MutuallyExclusiveTokenSets { get; set; }
         public JObject UserConfig { get; set; }
         public bool ConfigValid { get; set; }
         public class ConfigToken
@@ -71,7 +72,7 @@ namespace Berezhkov
             }
             public override string ToString()
             {
-                return TokenName + ": " + HelpString;
+                return TokenName;
             }
         }
 
@@ -92,9 +93,28 @@ namespace Berezhkov
                     ConfigValid = false;
                 }
             }
+            bool activeSet = false;
+            foreach (var mutualset in MutuallyExclusiveTokenSets)
+            {
+                int setCount = 0;
+                List<string> setlist = new List<string>();
+                foreach (var set in mutualset)
+                {
+                    setlist.Add("["+string.Join(',',set)+"]");
+                    if(set.Any(token => token.ContainsValidValue))
+                    {
+                        setCount++;
+                    }
+                }
+                if(setCount > 1)
+                {
+                    ConfigValid = false;
+                    Console.WriteLine("Multiple mutually exclusive tokens present from opposing sets: " + string.Join(' ',setlist));
+                }
+            }
             foreach (var property in UserConfig)
             {
-                if (!RequiredConfigTokens.Keys.Contains(property.Key) && !OptionalConfigTokens.Keys.Contains(property.Key)) ;
+                if (!RequiredConfigTokens.Keys.Contains(property.Key) && !OptionalConfigTokens.Keys.Contains(property.Key))
                 {
                     Console.WriteLine("Unrecognized token in input config file: " + property.Key);
                     ConfigValid = false;
@@ -229,8 +249,13 @@ namespace Berezhkov
 
             OptionalConfigTokens = GetDictionary(new ConfigToken[]
             {
-                new ConfigToken("NearestMarket",ValidationFactory<string>(),"String: Location of the nearest fruit market.")
+                new ConfigToken("NearestMarket",ValidationFactory<string>(),"String: Location of the nearest fruit market. Mutually exclusive with ClosestMarket."),
+                new ConfigToken("ClosestMarket",ValidationFactory<string>(),"String: Location of nearest fruit market. Mutually exclusive with NearestMarket.")
             });
+
+            MutuallyExclusiveTokenSets = new List<List<List<ConfigToken>>>();
+
+            MutuallyExclusiveTokenSets.Add(new List<List<ConfigToken>>() { new List<ConfigToken>() { OptionalConfigTokens["NearestMarket"] }, new List<ConfigToken>() { OptionalConfigTokens["ClosestMarket"] } });
 
             Initialize();
         }
