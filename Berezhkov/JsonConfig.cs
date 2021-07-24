@@ -13,7 +13,7 @@ namespace Berezhkov
         protected Dictionary<string, ConfigToken> OptionalConfigTokens { get; set; }
         protected List<List<List<ConfigToken>>> MutuallyExclusiveTokenSets { get; set; }
         public JObject UserConfig { get; set; }
-        public bool ConfigValid { get; set; }
+        public bool ConfigValid { get; set; } = true;
         public class ConfigToken
         {
             public string TokenName { get; set; } // Name of the token; corresponds to the search term in the user's config.
@@ -59,7 +59,7 @@ namespace Berezhkov
                 // Note about required vs optional token handling; ValidToken keeps track of whether or not the user's config should still be valid after the Validate function is over. If an optional token is missing, that is not a good reason to mark the user's config invalid.
                 else if (required)
                 {
-                    Console.WriteLine("User config is missing required token " + TokenName);
+                    Console.WriteLine("User config is missing required token " + TokenName + "\n" + HelpString);
                     ValidToken = false;
                 }
                 else if (DefaultValue != null)
@@ -76,24 +76,44 @@ namespace Berezhkov
             }
         }
 
-        protected void Initialize()
+        protected virtual void Initialize(string name = null, string type = null, bool suppressOutput = false)
         {
-            ConfigValid = true;
-            foreach (var token in RequiredConfigTokens)
+            Initialize(RequiredConfigTokens, OptionalConfigTokens, UserConfig, name, type, suppressOutput);
+        }
+
+        protected virtual void Initialize(Dictionary<string, ConfigToken> required, Dictionary<string, ConfigToken> optional, string name = null, string type = null, bool suppressOutput = false)
+        {
+            Initialize(required, optional, UserConfig, name, type, suppressOutput);
+        }
+
+        protected virtual void Initialize(Dictionary<string, ConfigToken> required, Dictionary<string, ConfigToken> optional, JObject config, string name = null, string type = null, bool suppressOutput = false)
+        {
+            string message = "";
+            TextWriter original = Console.Out;
+            if(suppressOutput)
             {
-                if (!token.Value.Validate(UserConfig, true))
+                Console.SetOut(TextWriter.Null);
+            }
+            if(!(string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(type)))
+            {
+                message = "Validation for " + type + " " + name + " failed.\n";
+            }
+            foreach (var token in required)
+            {
+                if (!token.Value.Validate(config, true))
                 {
+                    Console.Write(message);
                     ConfigValid = false;
                 }
             }
-            foreach (var token in OptionalConfigTokens)
+            foreach (var token in optional)
             {
-                if (!token.Value.Validate(UserConfig, false))
+                if (!token.Value.Validate(config, false))
                 {
+                    Console.Write(message);
                     ConfigValid = false;
                 }
             }
-            bool activeSet = false;
             foreach (var mutualset in MutuallyExclusiveTokenSets)
             {
                 int setCount = 0;
@@ -112,9 +132,9 @@ namespace Berezhkov
                     Console.WriteLine("Multiple mutually exclusive tokens present from opposing sets: " + string.Join(' ',setlist));
                 }
             }
-            foreach (var property in UserConfig)
+            foreach (var property in config)
             {
-                if (!RequiredConfigTokens.Keys.Contains(property.Key) && !OptionalConfigTokens.Keys.Contains(property.Key))
+                if (!required.Keys.Contains(property.Key) && !optional.Keys.Contains(property.Key))
                 {
                     Console.WriteLine("Unrecognized token in input config file: " + property.Key);
                     ConfigValid = false;
@@ -220,6 +240,29 @@ namespace Berezhkov
             return InnerMethod;
         }
 
+        // This constraint method allows nesting of Json objects inside one another without resorting to defining additional config types.
+
+        protected Func<JToken, string, bool> ConstrainJsonTokens(params ConfigToken[] requiredTokens)
+        {
+            bool InnerMethod(JToken inputToken, string inputName)
+            {
+                JObject inputJson = (JObject)inputToken;
+                Initialize(GetDictionary(requiredTokens), new Dictionary<string, ConfigToken>(), inputJson, inputName, "value of token");
+                return ConfigValid;
+            }
+            return InnerMethod;
+        }
+
+        protected Func<JToken, string, bool> ConstrainJsonTokens(ConfigToken[] requiredTokens, ConfigToken[] optionalTokens)
+        {
+            bool InnerMethod(JToken inputToken, string inputName)
+            {
+                JObject inputJson = (JObject)inputToken;
+                Initialize(GetDictionary(requiredTokens), GetDictionary(optionalTokens), inputJson, inputName, "value of token");
+                return ConfigValid;
+            }
+            return InnerMethod;
+        }
     }
 
     public static class JTokenExtension
@@ -234,74 +277,4 @@ namespace Berezhkov
                (token.Type == JTokenType.Undefined);
         }
     }
-
-    public class ExampleConfig : JsonConfig
-    {
-        string[] AcceptableFruits = { "Grape", "Orange", "Apple" };
-        public ExampleConfig(JObject inputUserConfig)
-        {
-            UserConfig = inputUserConfig;
-            RequiredConfigTokens = GetDictionary(new ConfigToken[]
-                {
-                new ConfigToken("Fruit",ValidationFactory<string>(ConstrainStringValues(new List<string>(AcceptableFruits))),"String: A helpful message to the user describing what this token is and why it must be one of these fruits and no others."),
-                new ConfigToken("NumberConsumed",ValidationFactory<int>(),"Int: A helpful message to the user describing why they must tell your mysterious program how many fruits they have consumed.")
-            });
-
-            OptionalConfigTokens = GetDictionary(new ConfigToken[]
-            {
-                new ConfigToken("NearestMarket",ValidationFactory<string>(),"String: Location of the nearest fruit market. Mutually exclusive with ClosestMarket."),
-                new ConfigToken("ClosestMarket",ValidationFactory<string>(),"String: Location of nearest fruit market. Mutually exclusive with NearestMarket.")
-            });
-
-            MutuallyExclusiveTokenSets = new List<List<List<ConfigToken>>>();
-
-            MutuallyExclusiveTokenSets.Add(new List<List<ConfigToken>>() { new List<ConfigToken>() { OptionalConfigTokens["NearestMarket"] }, new List<ConfigToken>() { OptionalConfigTokens["ClosestMarket"] } });
-
-            Initialize();
-        }
-
-        /*
-        
-        This silliness requires some explanation.
-
-        We could have made GenerateEmptyConfig() a static void method in JsonConfig, but the issue is that RequiredConfigTokens and OptionalConfigTokens would need to be static as well, which creates issues with
-        other methods inherited from JsonConfig. Issues can also happen when instantiating multiple JsonConfig objects.
-
-        Therefore, we need to instantiate an empty config (which would normally generate a warning, but we suppress it by rerouting console output temporarily) and run GenerateEmptyConfig from there.
-
-        The below method allows a user to execute ExampleConfig.GenerateEmptyFruitConfig("custompath/customfilename.json"), which will generate the following json file:
-
-        {
-            "Fruit":"String: A helpful message to the user describing what this token is and why it must be one of these fruits and no others.",
-            "NumberConsumed":"Int: A helpful message to the user describing why they must tell your mysterious program how many fruits they have consumed.",
-            "NearestMarket","Optional: String: Location of the nearest fruit market."
-        }
-
-        */
-
-        public static void GenerateEmptyFruitConfig(string outputPath)
-        {
-
-            TextWriter original = Console.Out;
-            using(var sw = new StringWriter())
-            {
-                Console.SetOut(sw);
-                ExampleConfig tempConfig = new ExampleConfig(JObject.Parse(""));
-                tempConfig.GenerateEmptyConfig(outputPath);
-            }
-
-            Console.SetOut(original);
-        }
-    }
-
-    /*
-    
-    Below is example console output if the user tried to pass in the config { "Fruit":"Watermelon","NumberConsumed":"bleventeen" }
-
-    Input Fruit with value Watermelon is not valid. Valid values: Grape,Orange,Apple
-    String: A helpful message to the user describing what this token is and why it must be one of these fruits and no others.
-    Token NumberConsumed with value bleventeen is in an invalid format.
-    Int: A helpful message to the user describing why they must tell your mysterious program how many fruits they have consumed.
-
-    */
 }
