@@ -8,70 +8,32 @@ using Berezhkov;
 
 namespace BerezhkovTesting
 {
-    public class ExampleConfig : JsonConfig
+    public class ExampleConfig : ShemaController
     {
         string[] AcceptableFruits = { "Grape", "Orange", "Apple" };
         public ExampleConfig(JObject inputUserConfig)
         {
             UserConfig = inputUserConfig;
-            RequiredConfigTokens = GetDictionary(new ConfigToken[]
+            RequiredConfigTokens.UnionWith(new HashSet<ConfigToken>
             {
-            new ConfigToken("Fruit",ValidationFactory<string>(ConstrainStringValues(new List<string>(AcceptableFruits))),"String: A helpful message to the user describing what this token is and why it must be one of these fruits and no others."),
-            new ConfigToken("FruitProperties",ValidationFactory<JObject>(ConstrainJsonTokens(
-                new ConfigToken[] {
-                new ConfigToken("Ripe",ValidationFactory<bool>(),"Bool: Indicates whether or not the fruit is ripe."),
-                new ConfigToken("MarketValue",ValidationFactory<int>(),"Int: Average price of one pound of the fruit in question. Decimals are not allowed because everyone who appends .99 to their prices in order to trick the human brain is insubordinate and churlish.")
-                },
-                new ConfigToken[] {
-                new ConfigToken("Color",ValidationFactory<string>(),"String: Indicates the color of the fruit.")
-                })),"Json: Additional properties of the fruit in question."),
-            new ConfigToken("NumberConsumed",ValidationFactory<int>(),"Int: A helpful message to the user describing why they must tell your mysterious program how many fruits they have consumed.")
-            });
+                new ConfigToken("Fruit",ValidationFactory<string>(ConstrainStringValues(AcceptableFruits)),"String: A helpful message to the user describing what this token is and why it must be one of these fruits and no others."),
+                new ConfigToken("FruitProperties",ValidationFactory<JObject>(ConstrainJsonTokens(
+                    new ConfigToken[] {
+                        new ConfigToken("Ripe",ValidationFactory<bool>(),"Bool: Indicates whether or not the fruit is ripe."),
+                        new ConfigToken("MarketValue",ValidationFactory<int>(ConstrainNumericValue((0,5),(10,15))),"Int: Average price of one pound of the fruit in question. Decimals are not allowed because everyone who appends .99 to their prices in order to trick the human brain is insubordinate and churlish.")
+                    },
+                    new ConfigToken[] {
+                        new ConfigToken("Color",ValidationFactory<string>(),"String: Indicates the color of the fruit.")
+                    })),"Json: Additional properties of the fruit in question."),
+                new ConfigToken("NumberConsumed",ValidationFactory<int>(ConstrainNumericValue(0)),"Int: A helpful message to the user describing why they must tell your mysterious program how many fruits they have consumed.")
+             });
 
-            OptionalConfigTokens = GetDictionary(new ConfigToken[]
+            OptionalConfigTokens.UnionWith(new HashSet<ConfigToken>
             {
-            new ConfigToken("NearestMarket",ValidationFactory<string>(),"String: Location of the nearest fruit market. Mutually exclusive with ClosestMarket."),
-            new ConfigToken("ClosestMarket",ValidationFactory<string>(),"String: Location of nearest fruit market. Mutually exclusive with NearestMarket.")
+                new ConfigToken("NearestMarket",ValidationFactory<string>(),"String: Location of the nearest fruit market. Mutually exclusive with ClosestMarket.")
             });
-
-            MutuallyExclusiveTokenSets = new List<List<List<ConfigToken>>>();
-
-            MutuallyExclusiveTokenSets.Add(new List<List<ConfigToken>>() { new List<ConfigToken>() { OptionalConfigTokens["NearestMarket"] }, new List<ConfigToken>() { OptionalConfigTokens["ClosestMarket"] } });
 
             Initialize();
-        }
-
-        /*
-
-        This silliness requires some explanation.
-
-        We could have made GenerateEmptyConfig() a static void method in JsonConfig, but the issue is that RequiredConfigTokens and OptionalConfigTokens would need to be static as well, which creates issues with
-        other methods inherited from JsonConfig. Issues can also happen when instantiating multiple JsonConfig objects.
-
-        Therefore, we need to instantiate an empty config (which would normally generate a warning, but we suppress it by rerouting console output temporarily) and run GenerateEmptyConfig from there.
-
-        The below method allows a user to execute ExampleConfig.GenerateEmptyFruitConfig("custompath/customfilename.json"), which will generate the following json file:
-
-        {
-            "Fruit":"String: A helpful message to the user describing what this token is and why it must be one of these fruits and no others.",
-            "NumberConsumed":"Int: A helpful message to the user describing why they must tell your mysterious program how many fruits they have consumed.",
-            "NearestMarket","Optional: String: Location of the nearest fruit market."
-        }
-
-        */
-
-        public static void GenerateEmptyFruitConfig(string outputPath)
-        {
-
-            TextWriter original = Console.Out;
-            using (var sw = new StringWriter())
-            {
-                Console.SetOut(sw);
-                ExampleConfig tempConfig = new ExampleConfig(JObject.Parse(""));
-                tempConfig.GenerateEmptyConfig(outputPath);
-            }
-
-            Console.SetOut(original);
         }
     }
 
@@ -94,12 +56,17 @@ namespace BerezhkovTesting
                 @"{
 	                'Fruit':'Melon',
                     'FruitProperties':{
-                        'MarketValue':15.99
+                        'MarketValue':7,
+                        'Omfed':true
                     },
 	                'NumberConsumed':3,
-	                'NearestMarket':'Barcelona'
+	                'NearestMarket':'Barcelona',
+                    'YouThoughtItWasARealTokenButItWasMe':'DIO'
                 }"));
-            Console.WriteLine("Hello World!");
+            if(!example.Valid)
+            {
+                Console.WriteLine(string.Join("\n", example.ErrorList));
+            }
         }
     }
 }
