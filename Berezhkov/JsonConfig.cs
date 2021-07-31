@@ -9,135 +9,89 @@ namespace Berezhkov
     public abstract class JsonConfig
     {
         // In child config definitions, RequiredConfigTokens and OptionalConfigTokens are set by passing a list of ConfigTokens to the GetDictionary method.
-        protected Dictionary<string, ConfigToken> RequiredConfigTokens { get; set; }
-        protected Dictionary<string, ConfigToken> OptionalConfigTokens { get; set; }
-        protected List<List<List<ConfigToken>>> MutuallyExclusiveTokenSets { get; set; }
+        private readonly HashSet<ConfigToken> _RequiredConfigTokens = new HashSet<ConfigToken>();
+        protected HashSet<ConfigToken> RequiredConfigTokens { get { return _RequiredConfigTokens; } set { _RequiredConfigTokens.UnionWith(value); } }
+        private readonly HashSet<ConfigToken> _OptionalConfigTokens = new HashSet<ConfigToken>();
+        protected HashSet<ConfigToken> OptionalConfigTokens { get { return _OptionalConfigTokens; } set { _OptionalConfigTokens.UnionWith(value); } }
+        public List<string> ErrorList { get; set; } = new List<string>();
         public JObject UserConfig { get; set; }
-        public bool ConfigValid { get; set; } = true;
-        public class ConfigToken
+        public bool Valid { get; set; } = true;
+        
+        /// <summary>
+        /// Checks UserConfig against RequiredConfigTokens and OptionalConfigTokens. If name and type are provided, the message "Validation for [type] [name] failed." will be added to ErrorList on validation failure.
+        /// </summary>
+        protected virtual void Initialize(string name = null, string type = null)
         {
-            public string TokenName { get; set; } // Name of the token; corresponds to the search term in the user's config.
-            public string HelpString { get; set; } // The HelpString is printed to console when the user generates an empty config file and when they enter an invalid value of some kind.
-            public string DefaultValue { get; set; } // If the DefaultValue is set and the user's config does not contain a value for this token, the UserConfig JObject stored in the JsonConfig parent will be modified to contain the token with the default value set.
-            public bool ContainsValidValue { get; set; } // This keeps track of whether or not the user's config contains a valid value for this token.
-            protected Func<JToken,string,bool> ValidationFunction { get; set; } // This function will be executed on the value found in the user config for this token, if a value exists.
-
-            public ConfigToken(string inputName, Func<JToken,string,bool> inputValidationFunction, string inputHelpString, string inputDefaultValue=null)
-            {
-                TokenName = inputName;
-                ValidationFunction = inputValidationFunction;
-                HelpString = inputHelpString;
-                DefaultValue = inputDefaultValue;
-            }
-            /*
-            
-            When Validate is called on a config token, it searches the JObject userConfig for a token with its current Name.
-
-            If such a token is found, ValidationFunction() is executed. The value found and the token's name are passed as parameters.
-
-            The function passed to a constructor should ideally be something created by ValidationFactory<T>(), which will enforce type checking on the user input and execute any additional Func<JToken, string, bool> passed to the ValidationFactory function.
-
-            Example below.
-
-            */
-            public bool Validate(JObject userConfig, bool required)
-            {
-                bool ValidToken = true;
-                ContainsValidValue = false;
-                if(userConfig.ContainsKey(TokenName))
-                {
-                    ValidToken = ValidationFunction(userConfig[TokenName], TokenName);
-                    if(!ValidToken)
-                    {
-                        Console.WriteLine(HelpString);
-                    }
-                    else
-                    {
-                        ContainsValidValue = true;
-                    }
-                }
-                // Note about required vs optional token handling; ValidToken keeps track of whether or not the user's config should still be valid after the Validate function is over. If an optional token is missing, that is not a good reason to mark the user's config invalid.
-                else if (required)
-                {
-                    Console.WriteLine("User config is missing required token " + TokenName + "\n" + HelpString);
-                    ValidToken = false;
-                }
-                else if (DefaultValue != null)
-                {
-                    userConfig[TokenName] = DefaultValue; // THIS MUTATES THE OBJECT PASSED INTO VALIDATE. USE WITH CAUTION.
-                    ValidToken = true;
-                    ContainsValidValue = true;
-                }
-                return ValidToken;
-            }
-            public override string ToString()
-            {
-                return TokenName;
-            }
+            Initialize(RequiredConfigTokens, OptionalConfigTokens, UserConfig, name, type);
         }
 
-        protected virtual void Initialize(string name = null, string type = null, bool suppressOutput = false)
+        /// <summary>
+        /// Checks UserConfig against the ConfigToken HashSets required and optional. If name and type are provided, the message "Validation for [type] [name] failed." will be added to ErrorList on validation failure.
+        /// </summary>
+        /// <param name="required">Collection of ConfigToken objects that must be included in UserConfig.</param>
+        /// <param name="optional">Collection of ConfigToken objects that can be included in UserConfig.</param>
+        protected virtual void Initialize(HashSet<ConfigToken> required, HashSet<ConfigToken> optional, string name = null, string type = null)
         {
-            Initialize(RequiredConfigTokens, OptionalConfigTokens, UserConfig, name, type, suppressOutput);
+            Initialize(required, optional, UserConfig, name, type);
         }
 
-        protected virtual void Initialize(Dictionary<string, ConfigToken> required, Dictionary<string, ConfigToken> optional, string name = null, string type = null, bool suppressOutput = false)
+        /// <summary>
+        /// Checks config against the ConfigToken HashSets required and optional. If name and type are provided, the message "Validation for [type] [name] failed." will be added to ErrorList on validation failure.
+        /// </summary>
+        /// <param name="required">Collection of ConfigToken objects that must be included in UserConfig.</param>
+        /// <param name="optional">Collection of ConfigToken objects that can be included in UserConfig.</param>
+        /// <param name="config">Config object to check against the ConfigToken sets.</param>
+        protected virtual void Initialize(HashSet<ConfigToken> required, HashSet<ConfigToken> optional, JObject config, string name = null, string type = null)
         {
-            Initialize(required, optional, UserConfig, name, type, suppressOutput);
-        }
-
-        protected virtual void Initialize(Dictionary<string, ConfigToken> required, Dictionary<string, ConfigToken> optional, JObject config, string name = null, string type = null, bool suppressOutput = false)
-        {
-            string message = "";
-            TextWriter original = Console.Out;
-            if(suppressOutput)
-            {
-                Console.SetOut(TextWriter.Null);
-            }
+            string message = " ";
             if(!(string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(type)))
             {
                 message = "Validation for " + type + " " + name + " failed.\n";
             }
+            void Invalidate()
+            {
+                if (!string.IsNullOrWhiteSpace(message))
+                {
+                    ErrorList.Add(message);
+                }
+                Valid = false;
+            }
             foreach (var token in required)
             {
-                if (!token.Value.Validate(config, true))
+                if(!config.ContainsKey(token.TokenName))
                 {
-                    Console.Write(message);
-                    ConfigValid = false;
+                    ErrorList.Add("User config is missing required token " + token.TokenName + "\n" + token.HelpString);
+                    Invalidate();
+                }
+                else if(config[token.TokenName].IsNullOrEmpty())
+                {
+                    ErrorList.Add("Value of token " + token.TokenName + " is null or empty.");
+                    Invalidate();
+                }
+                else if (!token.Validate(config[token.TokenName]))
+                {
+                    ErrorList.Add(token.HelpString);
+                    Invalidate();
                 }
             }
             foreach (var token in optional)
             {
-                if (!token.Value.Validate(config, false))
+                if(!config.ContainsKey(token.TokenName) && token.DefaultValue != null)
                 {
-                    Console.Write(message);
-                    ConfigValid = false;
+                    config[token.TokenName] = token.DefaultValue; // THIS MUTATES THE USER CONFIG. PASSED INTO VALIDATE. USE WITH CAUTION.
                 }
-            }
-            foreach (var mutualset in MutuallyExclusiveTokenSets)
-            {
-                int setCount = 0;
-                List<string> setlist = new List<string>();
-                foreach (var set in mutualset)
+                else if (!token.Validate(config[token.TokenName]))
                 {
-                    setlist.Add("["+string.Join(',',set)+"]");
-                    if(set.Any(token => token.ContainsValidValue))
-                    {
-                        setCount++;
-                    }
-                }
-                if(setCount > 1)
-                {
-                    ConfigValid = false;
-                    Console.WriteLine("Multiple mutually exclusive tokens present from opposing sets: " + string.Join(' ',setlist));
+                    ErrorList.Add(token.HelpString);
+                    Invalidate();
                 }
             }
             foreach (var property in config)
             {
-                if (!required.Keys.Contains(property.Key) && !optional.Keys.Contains(property.Key))
+                if (!required.Select(x => x.TokenName).Contains(property.Key) && !optional.Select(x => x.TokenName).Contains(property.Key))
                 {
-                    Console.WriteLine("Unrecognized token in input config file: " + property.Key);
-                    ConfigValid = false;
+                    ErrorList.Add("Unrecognized token in input config file: " + property.Key);
+                    Invalidate();
                 }
             }
         }
@@ -147,11 +101,11 @@ namespace Berezhkov
             List<string> configString = new List<string>();
             foreach(var token in RequiredConfigTokens)
             {
-                configString.Add(token.Key + ": " + (UserConfig.ContainsKey(token.Key) ? UserConfig[token.Key].ToString() : token.Value.DefaultValue == null ? "" : token.Value.DefaultValue));
+                configString.Add(token.TokenName + ": " + (UserConfig.ContainsKey(token.TokenName) ? UserConfig[token.TokenName].ToString() : token.DefaultValue == null ? "" : token.DefaultValue));
             }
             foreach (var token in OptionalConfigTokens)
             {
-                configString.Add(token.Key + ": " + (UserConfig.ContainsKey(token.Key) ? UserConfig[token.Key].ToString() : token.Value.DefaultValue == null ? "" : token.Value.DefaultValue));
+                configString.Add(token.TokenName + ": " + (UserConfig.ContainsKey(token.TokenName) ? UserConfig[token.TokenName].ToString() : token.DefaultValue == null ? "" : token.DefaultValue));
             }
             return string.Join('\n',configString);
         }
@@ -173,11 +127,11 @@ namespace Berezhkov
             JObject newConfig = new JObject();
             foreach(var token in RequiredConfigTokens)
             {
-                newConfig[token.Key] = token.Value.HelpString;
+                newConfig[token.TokenName] = token.HelpString;
             }
             foreach (var token in OptionalConfigTokens)
             {
-                newConfig[token.Key] = token.Value.HelpString;
+                newConfig[token.TokenName] = token.HelpString;
             }
             FileInfo file = new FileInfo(filepath);
             file.Directory.Create();
@@ -199,7 +153,7 @@ namespace Berezhkov
                 {
                     if(inputToken.IsNullOrEmpty())
                     {
-                        Console.WriteLine("The value of token " + tokenName + " is empty or null.");
+                        ErrorList.Add("The value of token " + tokenName + " is empty or null.");
                         validToken = false;
                     }
                     else
@@ -217,7 +171,7 @@ namespace Berezhkov
                 }
                 catch(FormatException)
                 {
-                    Console.WriteLine("Token " + tokenName + " with value " + inputToken.ToString() + " is in an invalid format.");
+                    ErrorList.Add("Token " + tokenName + " with value " + inputToken.ToString() + " is in an invalid format.");
                     return false;
                 }
             }
@@ -232,7 +186,7 @@ namespace Berezhkov
             {
                 if (!acceptableValues.Contains(inputToken.ToString())) //Returns false if inputString is not in provided list
                 {
-                    Console.WriteLine("Input " + inputName + " with value " + inputToken.ToString() + " is not valid. Valid values: " + string.Join(',', acceptableValues)); // Tell the user what's wrong and how to fix it.
+                    ErrorList.Add("Input " + inputName + " with value " + inputToken.ToString() + " is not valid. Valid values: " + string.Join(',', acceptableValues)); // Tell the user what's wrong and how to fix it.
                     return false;
                 }
                 return true;
@@ -247,8 +201,8 @@ namespace Berezhkov
             bool InnerMethod(JToken inputToken, string inputName)
             {
                 JObject inputJson = (JObject)inputToken;
-                Initialize(GetDictionary(requiredTokens), new Dictionary<string, ConfigToken>(), inputJson, inputName, "value of token");
-                return ConfigValid;
+                Initialize(requiredTokens.ToHashSet(), new HashSet<ConfigToken>(), inputJson, inputName, "value of token");
+                return Valid;
             }
             return InnerMethod;
         }
@@ -258,23 +212,10 @@ namespace Berezhkov
             bool InnerMethod(JToken inputToken, string inputName)
             {
                 JObject inputJson = (JObject)inputToken;
-                Initialize(GetDictionary(requiredTokens), GetDictionary(optionalTokens), inputJson, inputName, "value of token");
-                return ConfigValid;
+                Initialize(requiredTokens.ToHashSet(), optionalTokens.ToHashSet(), inputJson, inputName, "value of token");
+                return Valid;
             }
             return InnerMethod;
-        }
-    }
-
-    public static class JTokenExtension
-    {
-        public static bool IsNullOrEmpty(this JToken token)
-        {
-        return (token == null) ||
-               (token.Type == JTokenType.Array && !token.HasValues) ||
-               (token.Type == JTokenType.Object && !token.HasValues) ||
-               (token.Type == JTokenType.String && token.ToString() == String.Empty) ||
-               (token.Type == JTokenType.Null) ||
-               (token.Type == JTokenType.Undefined);
         }
     }
 }
