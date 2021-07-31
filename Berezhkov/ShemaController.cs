@@ -198,7 +198,7 @@ namespace Berezhkov
                 }
                 catch(FormatException)
                 {
-                    ErrorList.Add("Token " + tokenName + " with value " + inputToken.ToString() + " is in an invalid format. Expected value type: " + typeof(T).ToString());
+                    ErrorList.Add("Token " + tokenName + " with value " + inputToken.ToString() + " is an incorrect type. Expected value type: " + typeof(T).ToString());
                     return false;
                 }
             }
@@ -335,15 +335,19 @@ namespace Berezhkov
             bool InnerMethod(JToken inputToken, string inputName)
             {
                 double inputValue = (double)inputToken;
+                bool matchesAtLeastOne = false;
                 foreach(var domain in domains)
                 {
-                    if(inputValue < domain.Item1 || inputValue > domain.Item2)
+                    if(inputValue >= domain.Item1 && inputValue <= domain.Item2)
                     {
-                        ErrorList.Add("Token " + inputName + " with value " + inputValue.ToString() + " is invalid. Value must fall within one of the following domains, inclusive: " + string.Join(" ", domains.Select(x => x.ToString())));
-                        return false;
+                        matchesAtLeastOne = true;
                     }
                 }
-                return true;
+                if(!matchesAtLeastOne)
+                {
+                    ErrorList.Add("Token " + inputName + " with value " + inputValue.ToString() + " is invalid. Value must fall within one of the following domains, inclusive: " + string.Join(" ", domains.Select(x => x.ToString())));
+                }
+                return matchesAtLeastOne;
             }
             return InnerMethod;
         }
@@ -407,5 +411,69 @@ namespace Berezhkov
         }
 
         #endregion JObject Constraints
+
+        #region JArray Constraints
+
+        protected Func<JToken, string, bool> ConstrainArrayCount(int lowerBound)
+        {
+            bool InnerMethod(JToken inputToken, string inputName)
+            {
+                JArray inputArray = (JArray)inputToken;
+                if(inputArray.Count < lowerBound)
+                {
+                    ErrorList.Add("Value of token " + inputName + " contains " + inputArray.Count + " values, but must contain at least " + lowerBound + " values.");
+                    return false;
+                }
+                return true;
+            }
+            return InnerMethod;
+        }
+
+        protected Func<JToken, string, bool> ConstrainArrayCount(int lowerBound, int upperBound)
+        {
+            bool InnerMethod(JToken inputToken, string inputName)
+            {
+                JArray inputArray = (JArray)inputToken;
+                if (inputArray.Count < lowerBound || inputArray.Count > upperBound)
+                {
+                    ErrorList.Add("Value of token " + inputName + " contains " + inputArray.Count + " values, but must contain between " + lowerBound + " and " + upperBound + " values.");
+                    return false;
+                }
+                return true;
+            }
+            return InnerMethod;
+        }
+
+        protected Func<JToken, string, bool> ApplyConstraintsToAllArrayValues<T>(params Func<JToken, string, bool>[] constraints)
+        {
+            bool InnerMethod(JToken inputToken, string inputName)
+            {
+                JArray inputArray = (JArray)inputToken;
+                bool allPassed = true;
+                foreach(var value in inputArray)
+                {
+                    try
+                    {
+                        T castValue = value.Value<T>();
+                        foreach (var constraint in constraints)
+                        {
+                            if (!constraint(value, "in array " + inputName))
+                            {
+                                 allPassed = false;
+                            }
+                        }
+                    }
+                    catch (FormatException)
+                    {
+                        ErrorList.Add("Value " + value + " in array " + inputName + " is an incorrect type. Expected value type: " + typeof(T).ToString());
+                        allPassed = false;
+                    }
+                }
+                return allPassed;
+            }
+            return InnerMethod;
+        }
+
+        #endregion JArray Constraints
     }
 }

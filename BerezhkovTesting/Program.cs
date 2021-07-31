@@ -30,7 +30,8 @@ namespace BerezhkovTesting
 
             OptionalConfigTokens.UnionWith(new HashSet<ConfigToken>
             {
-                new ConfigToken("NearestMarket",ValidationFactory<string>(),"String: Location of the nearest fruit market. Mutually exclusive with ClosestMarket.")
+                new ConfigToken("NearestMarket",ValidationFactory<string>(),"String: Location of the nearest fruit market. Mutually exclusive with ClosestMarket."),
+                new ConfigToken("MohsHardnessRatingsOfRecentFruitPurchases",ValidationFactory<JArray>(ApplyConstraintsToAllArrayValues<double>(ConstrainNumericValue(0,5.5)),ConstrainArrayCount(1,4)),"Array: Array of doubles between 0 and 5.5.")
             });
 
             Initialize();
@@ -52,10 +53,11 @@ namespace BerezhkovTesting
     {
         static void Main(string[] args)
         {
-            ExampleConfig example = new ExampleConfig(JObject.Parse(
+            ExampleConfig badExample1 = new ExampleConfig(JObject.Parse(
                 @"{
 	                'Fruit':'Melon',
                     'FruitProperties':{
+                        'Ripe':'no',
                         'MarketValue':7,
                         'Omfed':true
                     },
@@ -63,10 +65,19 @@ namespace BerezhkovTesting
 	                'NearestMarket':'Barcelona',
                     'YouThoughtItWasARealTokenButItWasMe':'DIO'
                 }"));
-            if(!example.Valid)
-            {
-                Console.WriteLine(string.Join("\n", example.ErrorList));
-            }
+
+            ExampleConfig badExample2 = new ExampleConfig(JObject.Parse(
+                @"{
+	                'Fruit':'Apple',
+                    'FruitProperties':{
+                        'Ripe':false,
+                        'MarketValue':3
+                    },
+	                'NumberConsumed':3,
+                    'MohsHardnessRatingsOfRecentFruitPurchases':[2.5, 3.8, 9.5, 'eight', 0.1, 3.8, 17]
+                }"));
+
+            Console.WriteLine(string.Join("\n", badExample2.ErrorList));
         }
     }
 }
