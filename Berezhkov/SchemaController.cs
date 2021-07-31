@@ -285,7 +285,7 @@ namespace Berezhkov
         #endregion String Constraints
 
         #region Numeric Constraints
-
+        
         /// <summary>
         /// Constrains numeric values with only a lower bound.
         /// </summary>
@@ -358,6 +358,11 @@ namespace Berezhkov
 
         // This constraint method allows nesting of Json objects inside one another without resorting to defining additional config types.
 
+        /// <summary>
+        /// Allows nested Json property checking.
+        /// </summary>
+        /// <param name="requiredTokens">Array of required ConfigToken objects that will be applied to the passed Json object.</param>
+        /// <returns>Function ensuring the passed JObject contains all tokens in requiredTokens and all validation functions are passed.</returns>
         protected Func<JToken, string, bool> ConstrainJsonTokens(params ConfigToken[] requiredTokens)
         {
             bool InnerMethod(JToken inputToken, string inputName)
@@ -369,6 +374,13 @@ namespace Berezhkov
             return InnerMethod;
         }
 
+
+        /// <summary>
+        /// Allows nested Json property checking.
+        /// </summary>
+        /// <param name="requiredTokens">Array of required ConfigToken objects that will be applied to the passed Json object.</param>
+        /// <param name="optionalTokens">Array of optional ConfigToken objects that will be applied to the passed Json object.</param>
+        /// <returns>Function ensuring the passed JObject contains all tokens in requiredTokens and all validation functions are passed for both token arrays.</returns>
         protected Func<JToken, string, bool> ConstrainJsonTokens(ConfigToken[] requiredTokens, ConfigToken[] optionalTokens)
         {
             bool InnerMethod(JToken inputToken, string inputName)
@@ -380,6 +392,11 @@ namespace Berezhkov
             return InnerMethod;
         }
 
+        /// <summary>
+        /// Constrains the number of properties in a JObject with a lower bound.
+        /// </summary>
+        /// <param name="lowerBound">Minimum number of properties the target JObject must contain.</param>
+        /// <returns>Function ensuring a JObject has at least lowerBound properties.</returns>
         protected Func<JToken, string, bool> ConstrainPropertyCount(int lowerBound)
         {
             bool InnerMethod(JToken inputToken, string inputName)
@@ -395,6 +412,12 @@ namespace Berezhkov
             return InnerMethod;
         }
 
+        /// <summary>
+        /// Constrains the number of properties in a JObject with a lower and upper bound.
+        /// </summary>
+        /// <param name="lowerBound">Minimum number of properties the target JObject must contain.</param>
+        /// <param name="upperBound">Maximum number of properties the target JObject can contain.</param>
+        /// <returns>Function ensuring a JObject has at least lowerBound and at most upperBound properties.</returns>
         protected Func<JToken, string, bool> ConstrainPropertyCount(int lowerBound, int upperBound)
         {
             bool InnerMethod(JToken inputToken, string inputName)
@@ -414,6 +437,11 @@ namespace Berezhkov
 
         #region JArray Constraints
 
+        /// <summary>
+        /// Constrains the number of items in a JArray with a lower bound.
+        /// </summary>
+        /// <param name="lowerBound">Minimum number of items in the target JArray.</param>
+        /// <returns>Function ensuring a JArray has at least lowerBound items.</returns>
         protected Func<JToken, string, bool> ConstrainArrayCount(int lowerBound)
         {
             bool InnerMethod(JToken inputToken, string inputName)
@@ -429,6 +457,12 @@ namespace Berezhkov
             return InnerMethod;
         }
 
+        /// <summary>
+        /// Constrains the number of items in a JArray with a lower bound and upper bound.
+        /// </summary>
+        /// <param name="lowerBound">Minimum number of items in the target JArray.</param>
+        /// <param name="upperBound">Maximum number of items in the target JArray.</param>
+        /// <returns>Function ensuring a JArray has at least lowerBound and at most upperBound items.</returns>
         protected Func<JToken, string, bool> ConstrainArrayCount(int lowerBound, int upperBound)
         {
             bool InnerMethod(JToken inputToken, string inputName)
@@ -444,6 +478,12 @@ namespace Berezhkov
             return InnerMethod;
         }
 
+        /// <summary>
+        /// Ensures all items in the target JArray are of type T and pass all provided constraints.
+        /// </summary>
+        /// <typeparam name="T">Type of all items in the target JArray.</typeparam>
+        /// <param name="constraints">List of functions to run on all items in the JArray individually.</param>
+        /// <returns>Function ensuring that all items in the target JArray are of type T and pass all provided constraints.</returns>
         protected Func<JToken, string, bool> ApplyConstraintsToAllArrayValues<T>(params Func<JToken, string, bool>[] constraints)
         {
             bool InnerMethod(JToken inputToken, string inputName)
