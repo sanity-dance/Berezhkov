@@ -8,7 +8,7 @@ using Berezhkov;
 
 namespace BerezhkovTesting
 {
-    public class ExampleConfig : ShemaController
+    public class ExampleConfig : SchemaController
     {
         string[] AcceptableFruits = { "Grape", "Orange", "Apple" };
         public ExampleConfig(JObject inputUserConfig)

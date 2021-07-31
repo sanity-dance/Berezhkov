@@ -7,7 +7,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Berezhkov
 {
-    public abstract class ShemaController
+    public abstract class SchemaController
     {
         // In child config definitions, RequiredConfigTokens and OptionalConfigTokens are set by merging a new HashSet of config tokens with the parent.
         /// <summary>
