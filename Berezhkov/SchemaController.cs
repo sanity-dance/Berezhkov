@@ -282,10 +282,78 @@ namespace Berezhkov
             return InnerMethod;
         }
 
+        /// <summary>
+        /// Constrains length of string value.
+        /// </summary>
+        /// <param name="lowerBound">Minimum length of passed string.</param>
+        /// <returns>Function that ensures the length of a string is at least lowerBound.</returns>
+        protected Func<JToken, string, bool> ConstrainStringLength(int lowerBound)
+        {
+            bool InnerMethod(JToken inputToken, string inputName)
+            {
+                string inputString = inputToken.ToString();
+                if(inputString.Length < lowerBound)
+                {
+                    ErrorList.Add("Token " + inputName + " with value " + inputToken + " must have a length of at least " + lowerBound + ". Actual length: " + inputString.Length);
+                    return false;
+                }
+                return true;
+            }
+            return InnerMethod;
+        }
+
+        /// <summary>
+        /// Constrains length of string value.
+        /// </summary>
+        /// <param name="lowerBound">Minimum length of passed string.</param>
+        /// <param name="upperBound">Maximum length of passed string.</param>
+        /// <returns>Function that ensures the length of a string is at least lowerBound and at most upperBound.</returns>
+        protected Func<JToken, string, bool> ConstrainStringLength(int lowerBound, int upperBound)
+        {
+            bool InnerMethod(JToken inputToken, string inputName)
+            {
+                string inputString = inputToken.ToString();
+                if (inputString.Length < lowerBound || inputString.Length > upperBound)
+                {
+                    ErrorList.Add("Token " + inputName + " with value " + inputToken + " must have a length of at least " + lowerBound + " and at most " + upperBound + ". Actual length: " + inputString.Length);
+                    return false;
+                }
+                return true;
+            }
+            return InnerMethod;
+        }
+
+        /// <summary>
+        /// Forbids characters from a string.
+        /// </summary>
+        /// <param name="forbiddenCharacters">Characters that cannot occur in the input string.</param>
+        /// <returns>Function that ensures the input string does not contain any of the passed characters.</returns>
+        protected Func<JToken, string, bool> ForbidStringCharacters(params char[] forbiddenCharacters)
+        {
+            bool InnerMethod(JToken inputToken, string inputName)
+            {
+                string inputString = inputToken.ToString();
+                bool containsForbidden = false;
+                foreach(var forbiddenCharacter in forbiddenCharacters)
+                {
+                    if(inputString.IndexOf(forbiddenCharacter) != -1)
+                    {
+                        containsForbidden = true;
+                    }
+                }
+                if(containsForbidden)
+                {
+                    ErrorList.Add("Token " + inputName + " with value " + inputToken + " contains at least one of a forbidden character: " + string.Join(" ", forbiddenCharacters));
+                }
+                return containsForbidden;
+            }
+            return InnerMethod;
+        }
+
         #endregion String Constraints
 
         #region Numeric Constraints
-        
+
         /// <summary>
         /// Constrains numeric values with only a lower bound.
         /// </summary>
