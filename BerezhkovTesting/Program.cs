@@ -77,7 +77,7 @@ namespace BerezhkovTesting
                     'MohsHardnessRatingsOfRecentFruitPurchases':[2.5, 3.8, 9.5, 'eight', 0.1, 3.8, 17]
                 }"));
 
-            Console.WriteLine(string.Join("\n", badExample2.ErrorList));
+            Console.WriteLine(string.Join("\n", badExample1.ErrorList));
         }
     }
 }

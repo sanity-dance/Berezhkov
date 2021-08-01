@@ -60,7 +60,7 @@ namespace Berezhkov
             string message = " ";
             if(!(string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(type)))
             {
-                message = "Validation for " + type + " " + name + " failed.\n";
+                message = "Validation for " + type + " " + name + " failed.";
             }
             foreach (var token in required)
             {
@@ -115,7 +115,7 @@ namespace Berezhkov
             }
             if (!Valid && !string.IsNullOrWhiteSpace(message))
             {
-                ErrorList.Add(message);
+                 ErrorList.Add(message);
             }
         }
 
